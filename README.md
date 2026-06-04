@@ -1,4 +1,4 @@
-# MSA-Frame
+# msa-payment
 
 > Spring Boot와 Spring Cloud 기반으로 구성한 **MSA 학습용 프레임워크 프로젝트**입니다.  
 > 서비스 디스커버리, API Gateway, Config Server, 서비스 간 Feign 통신, Redis/Redisson 기반 동시성 제어, Kafka 기반 이벤트 처리, 결제 흐름의 Saga/Outbox 패턴을 실험하기 위한 구조를 갖고 있습니다.

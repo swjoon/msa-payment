@@ -1,6 +1,7 @@
 package app.backend.orderservice.order.service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,6 +11,7 @@ import app.backend.orderservice.order.dto.req.CreateOrderReqDto;
 import app.backend.orderservice.order.dto.res.CreateOrderResDto;
 import app.backend.orderservice.order.dto.res.GetOrderResDto;
 import app.backend.orderservice.order.entity.Order;
+import app.backend.orderservice.order.entity.OrderStatus;
 import app.backend.orderservice.order.exception.OrderErrorCode;
 import app.backend.orderservice.order.exception.OrderException;
 import app.backend.orderservice.order.repository.OrderRepository;
@@ -73,12 +75,10 @@ public class OrderServiceImpl implements OrderService {
 
 	@Override
 	@Transactional
-	public Order rejectOrder(final Long orderId) {
+	public void rejectOrder(final Long orderId) {
 		Order order = getOrderEntity(orderId);
 
 		order.reject();
-
-		return order;
 	}
 
 	@Override
@@ -89,6 +89,19 @@ public class OrderServiceImpl implements OrderService {
 		order.cancel();
 
 		return order;
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<Order> getOrderTestResult(final Long itemId, final OrderStatus orderStatus) {
+
+		return orderRepository.findOrderList(itemId, orderStatus);
+	}
+
+	@Override
+	public Long getOrderCountByItemId(final Long itemId) {
+
+		return orderRepository.getOrderCountByItemId(itemId);
 	}
 
 	/**
@@ -103,4 +116,5 @@ public class OrderServiceImpl implements OrderService {
 			() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND)
 		);
 	}
+
 }

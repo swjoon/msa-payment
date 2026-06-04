@@ -85,6 +85,19 @@ eureka:
     service-url:
       defaultZone: http://admin:1234@localhost:8761/eureka
 
+internal:
+  item:
+    stock:
+      retry:
+        max-attempts: 3
+        delay: 100
+        multiplier: 2.0
+        max-delay: 1000
+        non-retryable-codes:
+          - I001
+          - I002
+          - I003
+
 logging:
   level:
     app.backend.order.client: DEBUG

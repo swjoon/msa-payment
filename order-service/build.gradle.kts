@@ -55,6 +55,7 @@ dependencies {
 
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
+    implementation("org.springframework.retry:spring-retry")
 
     testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")

@@ -4,8 +4,10 @@ import app.backend.orderservice.order.entity.Order;
 
 public interface OrderEventService {
 
-	Order rejectOrderWithItemIncreaseEvent(final Long orderId, final Long itemId, final int stock);
+	Order rejectOrderWithItemReleaseEvent(Long orderId, Long itemId, int stock, String releaseCommandId);
 
-	Order pendingOrderWithPaymentCheckEvent(final Long orderId, final String orderNumber, final String paymentKey);
+	void rejectOrderWithItemReleaseIfDeductedEvent(Long orderId, Long itemId, int stock, String decreaseCommandId, String releaseCommandId);
+
+	Order pendingOrderWithPaymentCheckEvent(Long orderId, String orderNumber, String paymentKey);
 
 }

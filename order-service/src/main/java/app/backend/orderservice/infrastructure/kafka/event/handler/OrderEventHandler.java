@@ -3,11 +3,13 @@ package app.backend.orderservice.infrastructure.kafka.event.handler;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import app.backend.orderservice.global.util.IdempotencyUtil;
 import app.backend.orderservice.infrastructure.kafka.event.dto.KafkaEventMeta;
 import app.backend.orderservice.infrastructure.kafka.event.dto.response.PaymentApprovedEvent;
 import app.backend.orderservice.infrastructure.kafka.event.dto.response.PaymentFailedEvent;
 import app.backend.orderservice.infrastructure.kafka.event.dto.response.PaymentUnknownEvent;
 import app.backend.orderservice.infrastructure.kafka.message.service.ProcessedMessageService;
+import app.backend.orderservice.order.constant.OrderConstants;
 import app.backend.orderservice.order.entity.Order;
 import app.backend.orderservice.order.event.OrderEventService;
 import app.backend.orderservice.order.service.OrderService;
@@ -89,7 +91,6 @@ public class OrderEventHandler {
 
 		Order order = orderService.getOrder(event.orderId());
 
-
 		if (order.isConfirmed()) {
 			log.error(
 				"이미 확정된 주문에 결제 실패 이벤트가 도착했습니다. 확인 필요. orderId={}, orderNumber={}, paymentKey={}",
@@ -103,10 +104,15 @@ public class OrderEventHandler {
 		Long itemId = order.getItemId();
 		int stock = order.getStock();
 
-		orderEventService.rejectOrderWithItemIncreaseEvent(
+		orderEventService.rejectOrderWithItemReleaseEvent(
 			event.orderId(),
 			itemId,
-			stock
+			stock,
+			IdempotencyUtil.getIdempotencyKey(
+				OrderConstants.RELEASE,
+				event.orderId(),
+				itemId
+			)
 		);
 
 		log.info(

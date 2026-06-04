@@ -20,7 +20,7 @@ public interface ItemServiceClient {
 	GetItemDto getItemDto(@PathVariable Long itemId);
 
 	@PatchMapping("/internal/items/{itemId}")
-	void updateItemStock(
+	boolean updateItemStock(
 		@PathVariable Long itemId,
 		@RequestBody UpdateItemStockDto requestDto
 	);

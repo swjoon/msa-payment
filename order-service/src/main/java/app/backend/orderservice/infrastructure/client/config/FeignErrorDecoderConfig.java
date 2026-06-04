@@ -126,14 +126,6 @@ public class FeignErrorDecoderConfig {
 		return traceId != null ? traceId : TraceConstants.NO_TRACE;
 	}
 
-	private boolean isItemServiceClient(String methodKey) {
-		return methodKey != null && methodKey.contains("ItemServiceClient");
-	}
-
-	private boolean isPaymentServiceClient(String methodKey) {
-		return methodKey != null && methodKey.contains("PaymentServiceClient");
-	}
-
 	private InternalServiceType resolveServiceType(String methodKey) {
 		if (methodKey.contains("ItemServiceClient")) {
 			return InternalServiceType.ITEM;

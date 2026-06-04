@@ -15,6 +15,7 @@ import app.backend.orderservice.order.dto.req.ConfirmOrderPaymentReqDto;
 import app.backend.orderservice.order.dto.req.CreateOrderReqDto;
 import app.backend.orderservice.order.dto.res.CreateOrderResDto;
 import app.backend.orderservice.order.dto.res.GetOrderResDto;
+import app.backend.orderservice.order.dto.res.GetOrderTestResultDto;
 import app.backend.orderservice.order.dto.res.GetOrderWithPaymentDto;
 import app.backend.orderservice.order.orchestrator.OrderOrchestrator;
 import app.backend.orderservice.order.service.OrderService;
@@ -79,4 +80,13 @@ public class OrderController {
 	}
 
 	// Todo : 결제 취소
+
+	// test
+	@GetMapping("/test/{itemId}/result")
+	public ApiResponse<GetOrderTestResultDto> getOrderResult(@PathVariable final Long itemId) {
+
+		GetOrderTestResultDto res = orderGateway.getOrderTestResult(itemId);
+
+		return ApiResponse.of(true, HttpStatus.OK, "Get Order Result Success", res);
+	}
 }

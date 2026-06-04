@@ -3,7 +3,10 @@ package app.backend.orderservice.order.event;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import app.backend.orderservice.infrastructure.kafka.constants.AggregateTypes;
 import app.backend.orderservice.infrastructure.kafka.constants.EventTopics;
+import app.backend.orderservice.infrastructure.kafka.constants.EventTypes;
+import app.backend.orderservice.infrastructure.kafka.event.dto.request.OrderItemReleaseIfDeductedEvent;
 import app.backend.orderservice.infrastructure.kafka.event.dto.request.OrderItemReleasedEvent;
 import app.backend.orderservice.infrastructure.kafka.event.dto.request.PaymentCheckedEvent;
 import app.backend.orderservice.infrastructure.kafka.outbox.service.OutboxEventService;
@@ -20,23 +23,59 @@ public class OrderEventServiceImpl implements OrderEventService {
 
 	@Override
 	@Transactional
-	public Order rejectOrderWithItemIncreaseEvent(final Long orderId, final Long itemId, final int stock) {
+	public Order rejectOrderWithItemReleaseEvent(
+		final Long orderId,
+		final Long itemId,
+		final int stock,
+		final String commandId
+	) {
 
 		Order order = orderService.getOrder(orderId);
 
 		order.reject();
 
-		OrderItemReleasedEvent event = OrderItemReleasedEvent.from(itemId, stock);
+		OrderItemReleasedEvent event = OrderItemReleasedEvent.from(commandId, itemId, stock);
 
 		outboxEventService.publish(
-			"Item",
+			AggregateTypes.ITEM,
 			String.valueOf(itemId),
-			"OrderItemReleaseRequested",
+			EventTypes.ORDER_ITEM_RELEASE_REQUESTED,
 			EventTopics.ORDER_ITEM_RELEASE_REQUESTED,
 			event
 		);
 
 		return order;
+	}
+
+	@Override
+	@Transactional
+	public void rejectOrderWithItemReleaseIfDeductedEvent(
+		final Long orderId,
+		final Long itemId,
+		final int stock,
+		final String decreaseCommandId,
+		final String releaseCommandId
+	) {
+
+		Order order = orderService.getOrder(orderId);
+
+		order.reject();
+
+		OrderItemReleaseIfDeductedEvent event = OrderItemReleaseIfDeductedEvent.from(
+			orderId,
+			itemId,
+			stock,
+			decreaseCommandId,
+			releaseCommandId
+		);
+
+		outboxEventService.publish(
+			AggregateTypes.ITEM,
+			String.valueOf(itemId),
+			EventTypes.ORDER_ITEM_RELEASE_IF_DEDUCTED_REQUESTED,
+			EventTopics.ORDER_ITEM_RELEASE_IF_DEDUCTED_REQUESTED,
+			event
+		);
 	}
 
 	@Override
@@ -54,9 +93,9 @@ public class OrderEventServiceImpl implements OrderEventService {
 		PaymentCheckedEvent event = PaymentCheckedEvent.from(orderId, orderNumber, paymentKey);
 
 		outboxEventService.publish(
-			"Payment",
+			AggregateTypes.PAYMENT,
 			String.valueOf(orderId),
-			"PaymentCheckRequired",
+			EventTypes.PAYMENT_CHECK_REQUIRED,
 			EventTopics.PAYMENT_CHECK_REQUIRED,
 			event
 		);

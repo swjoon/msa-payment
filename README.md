@@ -572,6 +572,198 @@ mindmap
 
 ---
 
-## 16. 한 줄 소개
+## 16. 설계 의도: 정합성 우선 결제 흐름
 
-**MSA-Frame은 Spring Cloud 기반 MSA 구조에서 주문·재고·결제 정합성을 Saga, Redis Lock, Kafka 이벤트, Outbox 패턴으로 실험하기 위한 백엔드 아키텍처 프로젝트입니다.**
+이 프로젝트의 핵심은 단순히 주문, 상품, 결제 서비스를 나누는 것이 아니라 **서비스가 분리된 환경에서 주문·재고·결제 상태가 서로 어긋나지 않도록 만드는 것**입니다.
+
+모놀리식 구조에서는 하나의 트랜잭션 안에서 주문 생성, 재고 차감, 결제 상태 저장을 처리할 수 있지만, MSA 구조에서는 각 서비스가 독립된 DB와 트랜잭션을 갖기 때문에 하나의 로컬 트랜잭션으로 전체 정합성을 보장하기 어렵습니다.
+
+따라서 이 프로젝트에서는 다음 기준으로 설계했습니다.
+
+- 재고 차감은 Item Service가 책임진다.
+- 주문 상태 변경은 Order Service가 책임진다.
+- 결제 승인 및 결제 결과 저장은 Payment Service가 책임진다.
+- 전체 흐름의 조정은 Order Service의 Orchestrator가 담당한다.
+- 결제 실패 또는 결과 불명확 상황은 이벤트 기반 보상 처리로 수렴시킨다.
+- 동기 호출 실패와 실제 비즈니스 실패를 구분하여 처리한다.
+
+즉, 이 프로젝트는 **분산 트랜잭션을 직접 묶는 방식이 아니라 Saga Orchestration과 보상 이벤트를 통해 최종 정합성을 맞추는 구조**를 지향합니다.
+
+---
+
+## 17. 재고 동시성 처리 설계
+
+같은 상품의 재고 변경은 정합성을 위해 반드시 순차적으로 처리되어야 합니다.
+
+예를 들어 동일한 `itemId`에 대해 100개의 결제 요청이 동시에 들어오면, 모든 요청이 동시에 같은 재고 값을 읽고 차감할 경우 Lost Update 문제가 발생할 수 있습니다.
+
+```text
+초기 재고 = 1000
+
+요청 A: 1000 조회 → 990 저장
+요청 B: 1000 조회 → 990 저장
+
+실제로는 20개가 차감되어야 하지만 최종 재고는 990으로 남을 수 있음
+```
+
+이를 방지하기 위해 Item Service의 재고 변경 구간에는 Redis/Redisson 기반 분산 락을 적용했습니다.
+
+```java
+@CustomLock(
+    key = "'Item:' + #itemId",
+    waitTime = 3000,
+    leaseTime = 10000
+)
+```
+
+이 방식은 같은 상품에 대한 재고 변경 요청을 하나씩 처리하도록 만들어 재고 정합성을 보호합니다.
+
+다만 이 구조는 성능 관점에서 다음과 같은 특징을 갖습니다.
+
+- 같은 `itemId`에 대한 요청은 사실상 순차 처리된다.
+- 재고 변경 임계 구역이 길어질수록 전체 응답 시간이 증가한다.
+- 내부 통신 지연, DB 지연, 로그 I/O 지연이 있으면 락 대기 시간이 길어진다.
+- 따라서 재고 변경 로직은 최대한 짧고 단순하게 유지해야 한다.
+
+이 프로젝트에서는 정합성을 우선하기 위해 Redis Lock을 적용했으며, 이후 개선 방향으로는 DB Atomic Update 또는 Redis Lua Script 방식도 고려할 수 있습니다.
+
+---
+
+## 18. 정합성 검증 기준
+
+동시성 테스트 이후에는 단순히 요청이 성공했는지만 보는 것이 아니라, 최종 데이터가 정합성을 만족하는지 확인해야 합니다.
+
+가장 기본적인 재고 검증 기준은 다음과 같습니다.
+
+```text
+초기 재고 = 현재 상품 재고 + CONFIRMED 주문 수량 합 + PENDING 주문 수량 합
+```
+
+`PENDING` 주문은 아직 최종 상태가 확정되지 않은 주문이므로, 최종적으로는 `CONFIRMED` 또는 `REJECTED`로 수렴해야 합니다.
+
+테스트 후 확인해야 할 기준은 다음과 같습니다.
+
+- `CONFIRMED` 주문 수량 합과 실제 차감된 재고가 일치하는가?
+- `REJECTED` 주문이 재고를 점유하고 있지 않은가?
+- `PENDING` 주문이 남아 있다면 후속 이벤트로 수렴 가능한가?
+- 결제 `DONE` 상태와 주문 `CONFIRMED` 상태가 일치하는가?
+- 결제 실패 또는 승인 거절 주문의 재고가 복구되었는가?
+
+예시 SQL은 다음과 같습니다.
+
+```sql
+select status, count(*), sum(stock)
+from tbl_order
+where item_id = ?
+group by status;
+```
+
+```sql
+select payment_status, count(*)
+from payment
+group by payment_status;
+```
+
+---
+
+## 19. 동시성 테스트 결과
+
+### 테스트 환경
+
+- 로컬 노트북 RAM 16GB
+- Spring Application
+  - Config Server 3개
+  - Order Service
+  - Payment Service
+  - Item Service
+- Docker Compose
+  - MySQL
+  - Redis
+  - Kafka
+  - Debezium Connect
+  - Elasticsearch
+  - Kibana
+  - Logstash
+  - Filebeat
+
+### 테스트 조건
+
+- 동일한 `itemId`에 대해 100개 동시 결제 요청
+- 주문 1건당 재고 10개 차감
+- 내부 통신 실패 시 retry 적용
+- 결제 실패/보류 상황에서 이벤트 기반 재고 복구 및 결제 상태 확인 처리
+
+### 1차 결과: ELK 계열 포함 실행
+
+ELasticsearch, Kibana, Logstash, Filebeat을 함께 실행한 상태에서는 100개 동시 요청 처리에 약 17초가 소요되었습니다.
+
+이때 다수 요청이 내부 통신 retry를 모두 실패했고, 실패한 주문은 `REJECTED` 처리 후 재고 복구 이벤트를 통해 정합성을 맞췄습니다.
+
+분석 결과, 애플리케이션 로직 자체의 정합성 문제라기보다는 로컬 환경에서 로그 수집/검색 스택까지 함께 실행하면서 CPU, 메모리, 디스크 I/O 병목이 발생한 것으로 판단했습니다.
+
+### 2차 결과: ELK 계열 중지 후 실행
+
+Elasticsearch, Kibana, Logstash, Filebeat을 중지한 뒤 다시 테스트한 결과, 100개 동시 요청은 약 7초 내에 처리되었습니다.
+
+결과는 다음과 같습니다.
+
+```json
+{
+  "itemId": 21,
+  "totalOrderCount": 100,
+  "successCount": 85,
+  "successItemStock": 850,
+  "rejectCount": 15,
+  "rejectItemStock": 150,
+  "pendingCount": 0,
+  "pendingItemStock": 0,
+  "itemInfo": {
+    "stock": 150
+  }
+}
+```
+
+15건의 `REJECTED` 중 14건은 정상적인 결제 승인 거절이었고, 1건은 Payment Service 네트워크 문제로 인해 결제 상태 확인 이벤트가 발행된 뒤 최종 승인 거절을 확인하고 재고 복구가 처리되었습니다.
+
+최종 재고 검증 결과는 다음과 같습니다.
+
+```text
+성공 주문 수량 850 + 남은 재고 150 = 초기 재고 1000
+```
+
+즉, 동시 요청과 일부 네트워크 실패 상황에서도 최종 재고 정합성은 유지되었습니다.
+
+---
+
+## 20. 성능 테스트 해석
+
+이 테스트는 단순 조회 API의 처리량 테스트가 아니라 다음 작업을 포함한 End-to-End 흐름입니다.
+
+- 주문 조회
+- Item Service 재고 차감 요청
+- Redis Lock 기반 동시성 제어
+- Payment Service 결제 승인 요청
+- 결제 결과에 따른 주문 상태 변경
+- 결제 실패 시 Kafka 이벤트 발행
+- Consumer의 이벤트 처리
+- 재고 복구 이벤트 처리
+- Trace ID 기반 로그 기록
+
+따라서 같은 상품에 대한 100개 동시 요청에서 모든 요청이 완전히 병렬로 처리되지는 않습니다.  
+같은 `itemId`의 재고 변경은 정합성을 위해 순차적으로 처리되어야 하기 때문입니다.
+
+ELK 계열을 제거했을 때 처리 시간이 약 17초에서 약 7초로 줄어든 점을 통해, 로컬 환경에서는 애플리케이션 코드보다 인프라 리소스 경쟁이 주요 병목이었다고 볼 수 있습니다.
+
+다만 운영 환경에서는 다음과 같은 추가 검증이 필요합니다.
+
+- 서비스별 CPU / Memory 사용량
+- HikariCP active / pending connection
+- Redis Lock 대기 시간
+- Feign timeout / retry 횟수
+- Kafka consumer lag
+- MySQL slow query
+- JVM GC pause
+- 로그 출력량과 디스크 I/O
+
+---
+

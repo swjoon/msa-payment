@@ -12,7 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import app.backend.itemservice.global.constant.TraceConstants;
 import app.backend.itemservice.infrastructure.kafka.constants.EventTopics;
 import app.backend.itemservice.infrastructure.kafka.event.dto.KafkaEventMeta;
-import app.backend.itemservice.infrastructure.kafka.event.dto.response.OrderItemReleasedEvent;
+import app.backend.itemservice.infrastructure.kafka.event.dto.request.OrderItemReleaseIfDeductedEvent;
+import app.backend.itemservice.infrastructure.kafka.event.dto.request.OrderItemReleasedEvent;
 import app.backend.itemservice.infrastructure.kafka.event.handler.ItemEventHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +42,7 @@ public class ItemEventListener {
 			record.offset()
 		);
 
-		OrderItemReleasedEvent event =
-			objectMapper.readValue(record.value(), OrderItemReleasedEvent.class);
+		OrderItemReleasedEvent event = objectMapper.readValue(record.value(), OrderItemReleasedEvent.class);
 
 		KafkaEventMeta meta = KafkaEventMeta.from(record);
 
@@ -61,6 +61,47 @@ public class ItemEventListener {
 			MDC.remove(TraceConstants.TRACE_ID_MDC_KEY);
 		}
 
+	}
+
+	@KafkaListener(
+		topics = EventTopics.ORDER_ITEM_RELEASE_IF_DEDUCTED_REQUESTED,
+		groupId = "item-service"
+	)
+	public void listenItemReleaseIfDeductedRequested(
+		ConsumerRecord<String, String> record,
+		Acknowledgment ack
+	) throws JsonProcessingException {
+
+		log.info(
+			"OrderItemReleaseIfDeductedRequested 수신. topic={}, partition={}, offset={}",
+			record.topic(),
+			record.partition(),
+			record.offset()
+		);
+
+		OrderItemReleaseIfDeductedEvent event =
+			objectMapper.readValue(record.value(), OrderItemReleaseIfDeductedEvent.class);
+
+		KafkaEventMeta meta = KafkaEventMeta.from(record);
+
+		MDC.put(TraceConstants.TRACE_ID_MDC_KEY, currentTraceId(meta));
+
+		try {
+			itemEventHandler.releaseItemStockIfDeducted(
+				event,
+				meta,
+				String.format(
+					"%s.%s",
+					EventTopics.CONSUMER,
+					EventTopics.ORDER_ITEM_RELEASE_IF_DEDUCTED_REQUESTED
+				)
+			);
+
+			ack.acknowledge();
+
+		} finally {
+			MDC.remove(TraceConstants.TRACE_ID_MDC_KEY);
+		}
 	}
 
 	private String currentTraceId(KafkaEventMeta meta) {

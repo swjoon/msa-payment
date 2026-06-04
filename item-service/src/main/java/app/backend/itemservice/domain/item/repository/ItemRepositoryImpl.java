@@ -1,10 +1,10 @@
-package app.backend.itemservice.item.repository;
+package app.backend.itemservice.domain.item.repository;
 
 import java.util.Optional;
 
 import org.springframework.stereotype.Repository;
 
-import app.backend.itemservice.item.entity.Item;
+import app.backend.itemservice.domain.item.entity.Item;
 import lombok.RequiredArgsConstructor;
 
 @Repository

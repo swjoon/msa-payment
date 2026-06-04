@@ -1,4 +1,4 @@
-package app.backend.itemservice.item.entity;
+package app.backend.itemservice.domain.item.entity;
 
 import lombok.Getter;
 

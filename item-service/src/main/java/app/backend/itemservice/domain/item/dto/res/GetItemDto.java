@@ -1,6 +1,6 @@
-package app.backend.itemservice.item.dto.res;
+package app.backend.itemservice.domain.item.dto.res;
 
-import app.backend.itemservice.item.entity.Item;
+import app.backend.itemservice.domain.item.entity.Item;
 
 public record GetItemDto(
 	Long itemId,

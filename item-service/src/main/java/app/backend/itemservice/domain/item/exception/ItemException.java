@@ -1,4 +1,4 @@
-package app.backend.itemservice.item.exception;
+package app.backend.itemservice.domain.item.exception;
 
 import app.backend.itemservice.global.error.exception.DomainErrorCode;
 import app.backend.itemservice.global.error.exception.DomainException;

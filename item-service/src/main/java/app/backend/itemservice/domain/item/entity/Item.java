@@ -1,7 +1,7 @@
-package app.backend.itemservice.item.entity;
+package app.backend.itemservice.domain.item.entity;
 
-import app.backend.itemservice.item.exception.ItemErrorCode;
-import app.backend.itemservice.item.exception.ItemException;
+import app.backend.itemservice.domain.item.exception.ItemErrorCode;
+import app.backend.itemservice.domain.item.exception.ItemException;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;

@@ -1,8 +1,8 @@
-package app.backend.itemservice.item.repository;
+package app.backend.itemservice.domain.item.repository;
 
 import java.util.Optional;
 
-import app.backend.itemservice.item.entity.Item;
+import app.backend.itemservice.domain.item.entity.Item;
 
 public interface ItemRepository {
 

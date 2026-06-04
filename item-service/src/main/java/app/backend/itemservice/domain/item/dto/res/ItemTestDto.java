@@ -1,4 +1,4 @@
-package app.backend.itemservice.item.dto.res;
+package app.backend.itemservice.domain.item.dto.res;
 
 public record ItemTestDto(
 	String domainName,

@@ -1,4 +1,4 @@
-package app.backend.itemservice.item.dto.req;
+package app.backend.itemservice.domain.item.dto.req;
 
 public record UpdateItemDto(
 	String name,
